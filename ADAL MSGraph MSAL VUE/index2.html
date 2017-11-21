@@ -1,0 +1,200 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <script src="App/Scripts/graph-js-sdk-web.js"></script>
+</head>
+<body>
+    <div id="app">
+        {{authLibValue}}
+        <br />
+        <button v-on:click="login">Login</button>
+        <button v-on:click="startLoop">Start Loop</button>
+        <button v-on:click="test">Test</button>
+        <br />
+        <input type="radio" value="ADAL" v-model="authLibValue" /> Use Adal
+        <input type="radio" value="MSAL" v-model="authLibValue" /> Use MSAL
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+    <script src="https://secure.aadcdn.microsoftonline-p.com/lib/1.0.15/js/adal.min.js"></script>
+    <script src="https://secure.aadcdn.microsoftonline-p.com/lib/0.1.3/js/msal.min.js"></script>
+
+    <script>
+        AuthLibEnum = {
+            ADAL: 0,
+            MSAL: 1
+        };
+
+        var app = new Vue({
+            el: "#app",
+            data: {
+                //r//c
+                authLibrary: AuthLibEnum.ADAL,
+                message: "Vue Starting",
+                config: {
+                    instance: 'https://login.microsoftonline.com/',
+                    tenant: 'rca1.onmicrosoft.com',
+                    clientId: '85cd59b-436c-4d49-8993-7c7caa56b1ce',
+                    postLogoutRedirectUri: window.location.origin,
+                    graphScopes: ["user.read", "mail.send"]
+                },
+                authContext: {
+                },
+            },
+            computed: {
+                authLibValue: {
+                    get: function () {
+                        console.log("in getter");
+                        if (this.authLibrary === AuthLibEnum.ADAL) {
+                            return "ADAL";
+                        }
+                        else if (this.authLibrary === AuthLibEnum.MSAL) {
+                            return "MSAL";
+                        }
+                    },
+                    set: function (value) {
+                        console.log("in setter");
+                        if (value === "MSAL") {
+                            this.authLibrary = AuthLibEnum.MSAL;
+                        }
+                        else if (value === "ADAL") {
+                            this.authLibrary = AuthLibEnum.ADAL;
+                        }
+                    }
+                }
+            },
+            methods: {
+                test: function () {
+
+                },
+                onCreated: function () {
+                    console.log("in created");
+
+
+                    // --- ADAL Code --
+                    if (this.authLibrary === AuthLibEnum.ADAL) {
+                        this.authContext = new AuthenticationContext(this.config);
+
+                        console.log("checking callback")
+                        // Check For & Handle Redirect From AAD After Login
+                        var isCallback = this.authContext.isCallback(window.location.hash);
+                        this.authContext.handleWindowCallback();
+
+                        if (isCallback && !this.authContext.getLoginError()) {
+                            window.location = this.authContext._getItem(this.authContext.CONSTANTS.STORAGE.LOGIN_REQUEST);
+                        }
+
+
+                        console.log("authentication context created");
+
+                        var user = this.authContext.getCachedUser();
+                        if (user) {
+                            console.log("logged in");
+                        }
+                        else {
+                            console.log("not logged in");
+                        }
+                    }
+                },
+                startLoop: function () {
+                    console.log("making initial call");
+                    this.doWork();
+                    //  console.log("starting timer")
+                    // setInterval(this.doWork, 20000);
+
+
+                },
+                getCurrentUserMS: function (accessToken) {
+                    var client = MicrosoftGraph.Client.init({
+                        authProvider: (done) => {
+                            done(null, accessToken); //first parameter takes an error if you can't get an access token
+                        }
+                    });
+
+                    client
+                        .api('/me')
+                        .get((err, res) => {
+                            console.log(res); // prints info about authenticated user
+                        });
+                },
+
+                getCurrentUserXHR: function (access_token) {
+                    console.log('Calling API...');
+
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('GET', 'https://graph.microsoft.com/v1.0/me', true);
+                    xhr.setRequestHeader('Authorization', 'Bearer ' + access_token);
+                    xhr.onreadystatechange = function () {
+                        if (xhr.readyState === 4 && xhr.status === 200) {
+                            // Do something with the response
+                            console.log(
+                                JSON.stringify(JSON.parse(xhr.responseText), null, '  '));
+                        } else {
+                            // TODO: Do something with the error (or non-200 responses)
+                            console.log(
+                                'ERROR:\n\n' + xhr.responseText);
+                        }
+                    };
+                    xhr.send();
+
+                },
+                doWork: function () {
+                    var self = this;
+                    console.log("aquiring token");
+                    var resourceUri = 'https://graph.microsoft.com';
+
+
+                    // Acquire Token for Backend
+                    this.authContext.acquireToken(
+                        'https://graph.microsoft.com',
+                        function (error, token) {
+
+                            if (error || !token) {
+                                // TODO: Handle error obtaining access token
+                                document.getElementById('api_response').textContent =
+                                    'ERROR:\n\n' + error;
+                                return;
+                            }
+
+                            console.log("token obtained");
+                            console.log("token: " + token);
+                                                        
+                            // Use the access token
+                            self.getCurrentUserMS(token);
+                        }
+                    );
+
+
+                    //var client = MicrosoftGraph.Client.init({
+                    //    authProvider: (done) => {
+                    //        done(null, token); //first parameter takes an error if you can't get an access token
+                    //    }
+                    //});
+
+                    //client
+                    //    .api('/me')
+                    //    .get((err, res) => {
+                    //        console.log(res); // prints info about authenticated user
+                    //    });
+
+
+
+                },
+                login: function () {
+                    console.log("initiating Log in");
+                    this.authContext.login();
+                }
+            },
+            created: function () {
+                this.onCreated();
+            }
+
+        });
+
+
+
+    </script>
+</body>
+</html>
